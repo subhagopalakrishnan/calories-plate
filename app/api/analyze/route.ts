@@ -251,37 +251,91 @@ Be specific and accurate. Only include foods that are clearly visible. Return ON
       },
     }
 
-    const result = await model.generateContent([prompt, imagePart])
-    const response = await result.response
-    const content = response.text()
-    if (!content) {
+    let content: string
+    try {
+      const result = await model.generateContent([prompt, imagePart])
+      const response = result.response
+      
+      // Check if response was blocked
+      if (!response || !response.candidates || response.candidates.length === 0) {
+        return NextResponse.json(
+          { error: 'Could not analyze this image. Please try a different photo.' },
+          { status: 400 }
+        )
+      }
+      
+      content = response.text()
+    } catch (genError) {
+      console.error('Gemini generation error:', genError)
+      const errMsg = genError instanceof Error ? genError.message : String(genError)
+      
+      if (errMsg.includes('429') || errMsg.includes('quota')) {
+        return NextResponse.json(
+          { error: 'Rate limit exceeded. Please wait a minute and try again.' },
+          { status: 429 }
+        )
+      }
+      
       return NextResponse.json(
-        { error: 'Failed to analyze image' },
+        { error: 'Failed to analyze image. Please try again.' },
         { status: 500 }
+      )
+    }
+    
+    if (!content || content.trim() === '') {
+      return NextResponse.json(
+        { error: 'No food detected in image. Please try a clearer photo.' },
+        { status: 400 }
       )
     }
 
     // Parse the JSON response
     let foodData: Array<{ name: string; quantity: string }>
     try {
-      // Extract JSON from markdown code blocks if present
-      const jsonMatch = content.match(/\[[\s\S]*\]/)
+      // Clean up the content - remove markdown code blocks
+      let cleanContent = content.trim()
+      
+      // Remove ```json and ``` if present
+      cleanContent = cleanContent.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '')
+      
+      // Extract JSON array from the content
+      const jsonMatch = cleanContent.match(/\[[\s\S]*\]/)
       if (jsonMatch) {
         foodData = JSON.parse(jsonMatch[0])
       } else {
-        foodData = JSON.parse(content)
+        foodData = JSON.parse(cleanContent)
+      }
+      
+      // Validate the parsed data
+      if (!Array.isArray(foodData) || foodData.length === 0) {
+        throw new Error('No food items found')
       }
     } catch (parseError) {
       console.error('Failed to parse Gemini response:', content)
       // Fallback: try to extract food items from text
-      const lines = content.split('\n').filter(line => line.trim())
-      foodData = lines.map(line => {
-        const match = line.match(/(.+?):\s*(.+)/)
-        if (match) {
-          return { name: match[1].trim(), quantity: match[2].trim() }
-        }
-        return { name: line.trim(), quantity: '1 serving' }
-      })
+      const lines = content.split('\n').filter(line => line.trim() && !line.startsWith('```'))
+      foodData = lines
+        .map(line => {
+          // Try to match "food: quantity" or "food - quantity" patterns
+          const match = line.match(/["\s]*([^":,\[\]{}]+)["\s]*[:\-]\s*["\s]*([^",\[\]{}]+)["\s]*/)
+          if (match) {
+            return { name: match[1].trim(), quantity: match[2].trim() }
+          }
+          // If line looks like a food name, use it
+          const cleanLine = line.replace(/["\[\]{},]/g, '').trim()
+          if (cleanLine && cleanLine.length > 2) {
+            return { name: cleanLine, quantity: '1 serving' }
+          }
+          return null
+        })
+        .filter((item): item is { name: string; quantity: string } => item !== null)
+      
+      if (foodData.length === 0) {
+        return NextResponse.json(
+          { error: 'Could not identify foods in this image. Please try a clearer photo.' },
+          { status: 400 }
+        )
+      }
     }
 
     // Calculate calories for each food item
