@@ -119,40 +119,61 @@ function getDemoResponse(): FoodItem[] {
 }
 
 async function analyzeWithHuggingFace(imageBlob: Blob, apiKey: string): Promise<string> {
-  // Use BLIP model for image captioning via new router endpoint
-  const response = await fetch(
+  // Try multiple endpoints
+  const endpoints = [
+    'https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large',
     'https://router.huggingface.co/hf-inference/models/Salesforce/blip-image-captioning-large',
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/octet-stream',
-      },
-      body: imageBlob,
+  ]
+  
+  let lastError = ''
+  
+  for (const endpoint of endpoints) {
+    try {
+      console.log('Trying endpoint:', endpoint)
+      
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: imageBlob,
+      })
+
+      const responseText = await response.text()
+      console.log('Response status:', response.status, 'Body:', responseText.substring(0, 200))
+      
+      if (!response.ok) {
+        lastError = responseText
+        continue // Try next endpoint
+      }
+
+      const result = JSON.parse(responseText)
+      
+      // Handle different response formats
+      if (Array.isArray(result) && result[0]?.generated_text) {
+        return result[0].generated_text
+      }
+      if (result.generated_text) {
+        return result.generated_text
+      }
+      if (typeof result === 'string') {
+        return result
+      }
+      
+      // If we got here, try to extract any text
+      if (Array.isArray(result) && result.length > 0) {
+        return JSON.stringify(result[0])
+      }
+      
+      return JSON.stringify(result)
+      
+    } catch (err) {
+      console.error('Endpoint failed:', endpoint, err)
+      lastError = err instanceof Error ? err.message : String(err)
     }
-  )
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    console.error('HF API Error:', response.status, errorText)
-    throw new Error(`Hugging Face API error: ${response.status}`)
-  }
-
-  const result = await response.json()
-  console.log('HF Result:', result)
-  
-  // Handle different response formats
-  if (Array.isArray(result) && result[0]?.generated_text) {
-    return result[0].generated_text
-  }
-  if (result.generated_text) {
-    return result.generated_text
-  }
-  if (typeof result === 'string') {
-    return result
   }
   
-  throw new Error('Unexpected response format')
+  throw new Error(lastError || 'All endpoints failed')
 }
 
 function extractFoodsFromDescription(description: string): FoodItem[] {
