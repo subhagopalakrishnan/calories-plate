@@ -218,8 +218,8 @@ export async function POST(request: NextRequest) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey)
-    // Use gemini-pro-vision for image analysis
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro-vision' })
+    // Use gemini-2.0-flash-exp for image analysis (latest model)
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' })
 
     // Convert image to base64
     const arrayBuffer = await imageFile.arrayBuffer()
