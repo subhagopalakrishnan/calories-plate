@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { HfInference } from '@huggingface/inference'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 import { FoodItem } from '@/types'
 
 // Food database with common foods and their nutritional values per 100g
@@ -87,19 +87,16 @@ const FOOD_DATABASE: Record<string, { calories: number; protein: number; carbs: 
 function findClosestFood(foodName: string): string | null {
   const normalized = foodName.toLowerCase().trim()
   
-  // Direct match
   if (FOOD_DATABASE[normalized]) {
     return normalized
   }
   
-  // Partial match
   for (const key in FOOD_DATABASE) {
     if (normalized.includes(key) || key.includes(normalized)) {
       return key
     }
   }
   
-  // Word-by-word match
   const words = normalized.split(/\s+/)
   for (const word of words) {
     if (word.length > 3) {
@@ -125,62 +122,30 @@ function parseQuantity(quantityStr: string): number {
 function estimateWeight(quantity: number, unit: string, foodName: string): number {
   const unitLower = unit.toLowerCase()
   
-  if (unitLower.includes('g') || unitLower.includes('gram')) {
-    return quantity
-  }
+  if (unitLower.includes('g') || unitLower.includes('gram')) return quantity
+  if (unitLower.includes('kg')) return quantity * 1000
+  if (unitLower.includes('oz')) return quantity * 28.35
+  if (unitLower.includes('lb')) return quantity * 453.6
+  if (unitLower.includes('cup')) return quantity * 240
+  if (unitLower.includes('tbsp')) return quantity * 15
+  if (unitLower.includes('tsp')) return quantity * 5
   
-  if (unitLower.includes('kg') || unitLower.includes('kilogram')) {
-    return quantity * 1000
-  }
-  
-  if (unitLower.includes('oz') || unitLower.includes('ounce')) {
-    return quantity * 28.35
-  }
-  
-  if (unitLower.includes('lb') || unitLower.includes('pound')) {
-    return quantity * 453.6
-  }
-  
-  if (unitLower.includes('cup')) {
-    return quantity * 240
-  }
-  
-  if (unitLower.includes('tbsp') || unitLower.includes('tablespoon')) {
-    return quantity * 15
-  }
-  
-  if (unitLower.includes('tsp') || unitLower.includes('teaspoon')) {
-    return quantity * 5
-  }
-  
-  if (unitLower.includes('piece') || unitLower.includes('item') || unitLower.includes('serving') || unitLower.includes('slice')) {
+  if (unitLower.includes('piece') || unitLower.includes('serving') || unitLower.includes('slice')) {
     const pieceWeights: Record<string, number> = {
-      'apple': 182,
-      'banana': 118,
-      'egg': 50,
-      'bread': 25,
-      'cookie': 15,
-      'pizza': 100,
-      'burger': 150,
-      'samosa': 50,
-      'idli': 40,
-      'dosa': 100,
-      'roti': 40,
+      'apple': 182, 'banana': 118, 'egg': 50, 'bread': 25,
+      'cookie': 15, 'pizza': 100, 'burger': 150, 'samosa': 50,
+      'idli': 40, 'dosa': 100, 'roti': 40,
     }
-    
     for (const [food, weight] of Object.entries(pieceWeights)) {
-      if (foodName.toLowerCase().includes(food)) {
-        return quantity * weight
-      }
+      if (foodName.toLowerCase().includes(food)) return quantity * weight
     }
-    
     return quantity * 100
   }
   
   return quantity * 100
 }
 
-function calculateNutrition(foodName: string, quantity: string): FoodItem | null {
+function calculateNutrition(foodName: string, quantity: string): FoodItem {
   const foodKey = findClosestFood(foodName)
   
   if (!foodKey) {
@@ -196,8 +161,7 @@ function calculateNutrition(foodName: string, quantity: string): FoodItem | null
   
   const baseNutrition = FOOD_DATABASE[foodKey]
   const qty = parseQuantity(quantity)
-  const unit = quantity.toLowerCase()
-  const weightGrams = estimateWeight(qty, unit, foodName)
+  const weightGrams = estimateWeight(qty, quantity.toLowerCase(), foodName)
   const multiplier = weightGrams / 100
   
   return {
@@ -210,16 +174,12 @@ function calculateNutrition(foodName: string, quantity: string): FoodItem | null
   }
 }
 
-// Demo mode returns sample data
 function getDemoResponse(): FoodItem[] {
-  const demoFoods = [
+  return [
     { name: 'Grilled Chicken Breast', quantity: '150g', calories: 248, protein: 46.5, carbs: 0, fat: 5.4 },
     { name: 'Steamed Rice', quantity: '1 cup', calories: 206, protein: 4.3, carbs: 44.5, fat: 0.4 },
     { name: 'Mixed Vegetables', quantity: '100g', calories: 65, protein: 2.6, carbs: 13, fat: 0.3 },
-    { name: 'Green Salad', quantity: '1 serving', calories: 20, protein: 1.5, carbs: 4, fat: 0.2 },
   ]
-  const count = Math.floor(Math.random() * 2) + 2
-  return demoFoods.slice(0, count)
 }
 
 export async function POST(request: NextRequest) {
@@ -228,116 +188,99 @@ export async function POST(request: NextRequest) {
     const imageFile = formData.get('image') as File
 
     if (!imageFile) {
-      return NextResponse.json(
-        { error: 'No image provided' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'No image provided' }, { status: 400 })
     }
 
-    // Check for Hugging Face API key (primary)
-    const hfApiKey = process.env.HF_API_KEY || process.env.HUGGINGFACE_API_KEY
+    // Check for Gemini API key
+    const apiKey = process.env.GEMINI_API_KEY
     
-    if (!hfApiKey) {
-      // No API key - use demo mode
+    if (!apiKey) {
       return NextResponse.json({ 
         foodItems: getDemoResponse(),
         isDemo: true,
-        message: 'Running in demo mode. Set HF_API_KEY for real analysis.'
+        message: 'No API key configured. Set GEMINI_API_KEY in Vercel environment variables.'
       })
     }
 
-    const hf = new HfInference(hfApiKey)
+    const genAI = new GoogleGenerativeAI(apiKey)
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
-    // Convert image to blob for Hugging Face
+    // Convert image to base64
     const arrayBuffer = await imageFile.arrayBuffer()
-    const imageBlob = new Blob([arrayBuffer], { type: imageFile.type })
+    const base64Image = Buffer.from(arrayBuffer).toString('base64')
+    const mimeType = imageFile.type
 
-    try {
-      // Use image-to-text model to describe the food
-      const result = await hf.imageToText({
-        model: 'Salesforce/blip-image-captioning-large',
-        data: imageBlob,
-      })
+    const prompt = `Analyze this food image and identify all food items visible. For each food item, provide:
+1. The name of the food
+2. An estimated quantity (e.g., "1 cup", "200g", "2 pieces", "1 serving")
 
-      const imageDescription = result.generated_text || ''
-      console.log('Image description:', imageDescription)
+Format your response as a JSON array of objects with "name" and "quantity" fields.
+Example: [{"name": "Grilled Chicken", "quantity": "200g"}, {"name": "Rice", "quantity": "1 cup"}]
 
-      if (!imageDescription) {
-        return NextResponse.json({ 
-          foodItems: getDemoResponse(),
-          isDemo: true,
-          message: 'Could not analyze image. Showing demo results.'
-        })
-      }
+Return ONLY the JSON array, no other text.`
 
-      // Parse the description to extract food items
-      const words = imageDescription.toLowerCase().split(/\s+/)
-      const detectedFoods: Array<{ name: string; quantity: string }> = []
+    const imagePart = {
+      inlineData: {
+        data: base64Image,
+        mimeType: mimeType,
+      },
+    }
 
-      // Check each word against our food database
-      for (const [foodName] of Object.entries(FOOD_DATABASE)) {
-        if (imageDescription.toLowerCase().includes(foodName)) {
-          detectedFoods.push({ name: foodName, quantity: '1 serving' })
-        }
-      }
+    const result = await model.generateContent([prompt, imagePart])
+    const response = result.response
+    const content = response.text()
 
-      // If no specific foods found, try to extract nouns that might be food
-      if (detectedFoods.length === 0) {
-        const commonFoodWords = ['plate', 'bowl', 'dish', 'meal', 'food', 'sandwich', 'salad', 'rice', 'chicken', 'meat', 'vegetables', 'fruit']
-        for (const word of words) {
-          if (word.length > 3 && !commonFoodWords.includes(word)) {
-            const match = findClosestFood(word)
-            if (match) {
-              detectedFoods.push({ name: match, quantity: '1 serving' })
-            }
-          }
-        }
-      }
-
-      // If still no foods found, create a generic entry based on description
-      if (detectedFoods.length === 0) {
-        detectedFoods.push({ 
-          name: imageDescription.substring(0, 50), 
-          quantity: '1 serving' 
-        })
-      }
-
-      // Remove duplicates
-      const uniqueFoods = detectedFoods.filter((food, index, self) => 
-        index === self.findIndex(f => f.name.toLowerCase() === food.name.toLowerCase())
-      )
-
-      // Calculate nutrition for each detected food
-      const foodItems: FoodItem[] = uniqueFoods
-        .map(item => calculateNutrition(item.name, item.quantity))
-        .filter((item): item is FoodItem => item !== null)
-        .slice(0, 5) // Limit to 5 items
-
-      if (foodItems.length === 0) {
-        return NextResponse.json({ 
-          foodItems: getDemoResponse(),
-          isDemo: true,
-          message: 'Could not identify specific foods. Showing demo results.'
-        })
-      }
-
-      return NextResponse.json({ foodItems })
-
-    } catch (hfError) {
-      console.error('Hugging Face API error:', hfError)
+    if (!content) {
       return NextResponse.json({ 
         foodItems: getDemoResponse(),
         isDemo: true,
-        message: 'API error. Showing demo results.'
+        message: 'Could not analyze image.'
       })
     }
+
+    // Parse JSON response
+    let foodData: Array<{ name: string; quantity: string }>
+    try {
+      let cleanContent = content.trim()
+        .replace(/^```json\s*/i, '')
+        .replace(/^```\s*/i, '')
+        .replace(/\s*```$/i, '')
+      
+      const jsonMatch = cleanContent.match(/\[[\s\S]*\]/)
+      if (jsonMatch) {
+        foodData = JSON.parse(jsonMatch[0])
+      } else {
+        foodData = JSON.parse(cleanContent)
+      }
+    } catch {
+      console.error('Failed to parse response:', content)
+      return NextResponse.json({ 
+        foodItems: getDemoResponse(),
+        isDemo: true,
+        message: 'Could not parse food data.'
+      })
+    }
+
+    const foodItems = foodData.map(item => calculateNutrition(item.name, item.quantity))
+
+    return NextResponse.json({ foodItems })
 
   } catch (error) {
-    console.error('Error analyzing image:', error)
+    console.error('Error:', error)
+    const errMsg = error instanceof Error ? error.message : String(error)
+    
+    if (errMsg.includes('429') || errMsg.includes('quota')) {
+      return NextResponse.json({ 
+        foodItems: getDemoResponse(),
+        isDemo: true,
+        message: 'API quota exceeded. Please try again later.'
+      })
+    }
+    
     return NextResponse.json({ 
       foodItems: getDemoResponse(),
       isDemo: true,
-      message: 'Error occurred. Showing demo results.'
+      message: 'Error analyzing image.'
     })
   }
 }
