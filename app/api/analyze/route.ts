@@ -292,8 +292,27 @@ Be specific and accurate. Only include foods that are clearly visible. Return ON
     return NextResponse.json({ foodItems })
   } catch (error) {
     console.error('Error analyzing image:', error)
+    
+    const errorMessage = error instanceof Error ? error.message : 'Failed to analyze image'
+    
+    // Check for rate limit errors
+    if (errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('Too Many Requests')) {
+      return NextResponse.json(
+        { error: 'Rate limit exceeded. Please wait a minute and try again, or the daily quota may be exhausted. Try again tomorrow or create a new API key.' },
+        { status: 429 }
+      )
+    }
+    
+    // Check for invalid API key
+    if (errorMessage.includes('401') || errorMessage.includes('API_KEY_INVALID')) {
+      return NextResponse.json(
+        { error: 'Invalid API key. Please check your GEMINI_API_KEY in environment variables.' },
+        { status: 401 }
+      )
+    }
+    
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to analyze image' },
+      { error: errorMessage },
       { status: 500 }
     )
   }
