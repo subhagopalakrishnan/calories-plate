@@ -50,7 +50,7 @@ npm run dev
 - **Next.js 14** - React framework with App Router
 - **TypeScript** - Type safety
 - **Tailwind CSS** - Styling
-- **Google Gemini API** - Free vision model for food recognition (gemini-1.5-flash)
+- **Google Gemini API** - Free vision model for food recognition (gemini-pro-vision)
 - **Food Database** - Built-in nutritional database for common foods
 
 ## API Endpoints

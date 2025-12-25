@@ -19,7 +19,7 @@ async function testGeminiKey() {
   
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
     
     // Make a simple API call to test the key
     const result = await model.generateContent('Say "API key is working!" if you can read this.');
