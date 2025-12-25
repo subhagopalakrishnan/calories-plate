@@ -196,10 +196,24 @@ function calculateNutrition(foodName: string, quantity: string): FoodItem | null
   }
 }
 
+// Demo mode returns sample data when API quota is exceeded
+function getDemoResponse(): FoodItem[] {
+  const demoFoods = [
+    { name: 'Grilled Chicken Breast', quantity: '150g', calories: 248, protein: 46.5, carbs: 0, fat: 5.4 },
+    { name: 'Steamed Rice', quantity: '1 cup', calories: 206, protein: 4.3, carbs: 44.5, fat: 0.4 },
+    { name: 'Mixed Vegetables', quantity: '100g', calories: 65, protein: 2.6, carbs: 13, fat: 0.3 },
+    { name: 'Green Salad', quantity: '1 serving', calories: 20, protein: 1.5, carbs: 4, fat: 0.2 },
+  ]
+  // Return 2-3 random items to simulate variety
+  const count = Math.floor(Math.random() * 2) + 2
+  return demoFoods.slice(0, count)
+}
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData()
     const imageFile = formData.get('image') as File
+    const useDemoMode = formData.get('demo') === 'true'
 
     if (!imageFile) {
       return NextResponse.json(
@@ -208,13 +222,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Demo mode - return sample data without API call
+    if (useDemoMode) {
+      return NextResponse.json({ 
+        foodItems: getDemoResponse(),
+        isDemo: true 
+      })
+    }
+
     // Check if Gemini API key is configured
     const apiKey = process.env.GEMINI_API_KEY
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: 'Gemini API key not configured. Please set GEMINI_API_KEY in your .env file. Get a free API key at https://makersuite.google.com/app/apikey' },
-        { status: 500 }
-      )
+    if (!apiKey || apiKey === 'demo' || apiKey === 'DEMO') {
+      // No API key - use demo mode
+      return NextResponse.json({ 
+        foodItems: getDemoResponse(),
+        isDemo: true,
+        message: 'Running in demo mode. Set GEMINI_API_KEY for real analysis.'
+      })
     }
 
     const genAI = new GoogleGenerativeAI(apiKey)
@@ -270,10 +294,12 @@ Be specific and accurate. Only include foods that are clearly visible. Return ON
       const errMsg = genError instanceof Error ? genError.message : String(genError)
       
       if (errMsg.includes('429') || errMsg.includes('quota')) {
-        return NextResponse.json(
-          { error: 'Rate limit exceeded. Please wait a minute and try again.' },
-          { status: 429 }
-        )
+        // Fall back to demo mode when quota exceeded
+        return NextResponse.json({ 
+          foodItems: getDemoResponse(),
+          isDemo: true,
+          message: 'API quota exceeded. Showing demo results. Try again later or get a new API key.'
+        })
       }
       
       return NextResponse.json(
