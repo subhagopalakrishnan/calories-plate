@@ -85,3 +85,4 @@ For detailed deployment instructions, see [DEPLOYMENT.md](./DEPLOYMENT.md)
 
 MIT
 
+# calories-plate
