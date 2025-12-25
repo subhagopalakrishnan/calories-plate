@@ -119,9 +119,9 @@ function getDemoResponse(): FoodItem[] {
 }
 
 async function analyzeWithHuggingFace(imageBlob: Blob, apiKey: string): Promise<string> {
-  // Use BLIP model for image captioning
+  // Use BLIP model for image captioning via new router endpoint
   const response = await fetch(
-    'https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large',
+    'https://router.huggingface.co/hf-inference/models/Salesforce/blip-image-captioning-large',
     {
       method: 'POST',
       headers: {
@@ -244,7 +244,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ 
         foodItems: getDemoResponse(),
         isDemo: true,
-        message: 'Could not analyze image. Using demo data.'
+        message: `API Error: ${errorMsg.substring(0, 100)}`
       })
     }
 
