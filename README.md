@@ -15,7 +15,7 @@ A modern web application that uses AI to analyze food images and automatically c
 ### Prerequisites
 
 - Node.js 18+ installed
-- Google Gemini API key (FREE - get one at [https://makersuite.google.com/app/apikey](https://makersuite.google.com/app/apikey))
+- Hugging Face API key (FREE - get one at [https://huggingface.co/settings/tokens](https://huggingface.co/settings/tokens))
 
 ### Installation
 
@@ -26,10 +26,10 @@ npm install
 
 2. Create a `.env.local` file in the root directory:
 ```
-GEMINI_API_KEY=your_gemini_api_key_here
+HF_API_KEY=your_huggingface_api_key_here
 ```
 
-   Get your free API key at: [https://makersuite.google.com/app/apikey](https://makersuite.google.com/app/apikey)
+   Get your free API key at: [https://huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
 
 3. Run the development server:
 ```bash
@@ -50,7 +50,7 @@ npm run dev
 - **Next.js 14** - React framework with App Router
 - **TypeScript** - Type safety
 - **Tailwind CSS** - Styling
-- **Google Gemini API** - Free vision model for food recognition (gemini-2.0-flash-exp)
+- **Hugging Face API** - Free image captioning for food recognition (BLIP model)
 - **Food Database** - Built-in nutritional database for common foods
 
 ## API Endpoints
@@ -72,7 +72,7 @@ The easiest way to deploy is using Vercel:
 
 1. Push your code to GitHub
 2. Import your repository on [Vercel](https://vercel.com)
-3. Add environment variable `GEMINI_API_KEY` in Vercel project settings
+3. Add environment variable `HF_API_KEY` in Vercel project settings
 4. Deploy!
 
 For detailed deployment instructions, see [DEPLOYMENT.md](./DEPLOYMENT.md)
