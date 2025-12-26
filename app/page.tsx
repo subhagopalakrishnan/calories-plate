@@ -238,18 +238,59 @@ export default function Home() {
             {user ? (
               <DailyDashboard />
             ) : (
-              <div className="bg-white rounded-2xl shadow-xl p-6 text-center">
-                <div className="text-6xl mb-4">📊</div>
-                <h3 className="text-xl font-bold text-gray-800 mb-2">Track Your Progress</h3>
-                <p className="text-gray-600 mb-4">
-                  Sign in to save meals and track your daily calorie intake.
-                </p>
-                <button
-                  onClick={() => setShowAuthModal(true)}
-                  className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
-                >
-                  Get Started
-                </button>
+              <div className="bg-white rounded-2xl shadow-xl p-6">
+                <h3 className="text-xl font-bold text-gray-800 mb-4 text-center">Daily Nutrition Goals</h3>
+                
+                {/* Sample Goals Preview */}
+                <div className="space-y-3 mb-4">
+                  <div>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-600">🔥 Calories</span>
+                      <span className="text-gray-400">0 / 2000</span>
+                    </div>
+                    <div className="h-2 bg-gray-200 rounded-full" />
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-600">🥩 Protein</span>
+                      <span className="text-gray-400">0 / 50g</span>
+                    </div>
+                    <div className="h-2 bg-gray-200 rounded-full" />
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-600">🍞 Carbs</span>
+                      <span className="text-gray-400">0 / 250g</span>
+                    </div>
+                    <div className="h-2 bg-gray-200 rounded-full" />
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-600">🥑 Fat</span>
+                      <span className="text-gray-400">0 / 65g</span>
+                    </div>
+                    <div className="h-2 bg-gray-200 rounded-full" />
+                  </div>
+                </div>
+
+                <div className="border-t pt-4 text-center">
+                  <p className="text-sm text-gray-500 mb-3">
+                    Sign in to track your daily nutrition and set personalized goals
+                  </p>
+                  <button
+                    onClick={() => setShowAuthModal(true)}
+                    className="w-full px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+                  >
+                    Get Started Free
+                  </button>
+                </div>
+
+                {/* Quick Tips */}
+                <div className="mt-4 p-3 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg">
+                  <p className="text-xs text-gray-600">
+                    💡 <strong>Did you know?</strong> Tracking nutrition helps you make better food choices and achieve your health goals!
+                  </p>
+                </div>
               </div>
             )}
           </div>
