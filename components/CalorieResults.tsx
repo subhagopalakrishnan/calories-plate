@@ -1,18 +1,51 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { FoodItem } from '@/types'
 
 interface CalorieResultsProps {
   foodItems: FoodItem[]
   onUpdateItems?: (items: FoodItem[]) => void
+  userId?: string
 }
 
-export default function CalorieResults({ foodItems: initialItems, onUpdateItems }: CalorieResultsProps) {
+// Track original values for corrections
+interface OriginalValues {
+  [key: string]: {
+    name: string
+    quantity: string
+    calories: number
+    protein?: number
+    carbs?: number
+    fat?: number
+  }
+}
+
+export default function CalorieResults({ foodItems: initialItems, onUpdateItems, userId }: CalorieResultsProps) {
   const [items, setItems] = useState<FoodItem[]>(initialItems)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
   const [newItem, setNewItem] = useState({ name: '', quantity: '', calories: '' })
+  const [feedbackGiven, setFeedbackGiven] = useState(false)
+  const [savingCorrection, setSavingCorrection] = useState(false)
+  
+  // Store original values when items first load
+  const originalValues = useRef<OriginalValues>({})
+  
+  // Initialize original values
+  if (Object.keys(originalValues.current).length === 0) {
+    initialItems.forEach(item => {
+      const id = item.id || item.name
+      originalValues.current[id] = {
+        name: item.name,
+        quantity: item.quantity,
+        calories: item.calories,
+        protein: item.protein,
+        carbs: item.carbs,
+        fat: item.fat,
+      }
+    })
+  }
 
   // Calculate totals
   const totalCalories = items.reduce((sum, item) => sum + item.calories, 0)
@@ -20,20 +53,54 @@ export default function CalorieResults({ foodItems: initialItems, onUpdateItems 
   const totalCarbs = items.reduce((sum, item) => sum + (item.carbs || 0), 0)
   const totalFat = items.reduce((sum, item) => sum + (item.fat || 0), 0)
 
+  // Save correction to database
+  const saveCorrection = useCallback(async (item: FoodItem, original: OriginalValues[string]) => {
+    try {
+      setSavingCorrection(true)
+      await fetch('/api/corrections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          foodName: item.name,
+          originalQuantity: original.quantity,
+          correctedQuantity: item.quantity,
+          originalCalories: original.calories,
+          correctedCalories: item.calories,
+          originalProtein: original.protein,
+          correctedProtein: item.protein,
+          originalCarbs: original.carbs,
+          correctedCarbs: item.carbs,
+          originalFat: original.fat,
+          correctedFat: item.fat,
+        }),
+      })
+      console.log('Correction saved for:', item.name)
+    } catch (error) {
+      console.error('Failed to save correction:', error)
+    } finally {
+      setSavingCorrection(false)
+    }
+  }, [userId])
+
+  // Debounced correction save
+  const correctionTimeouts = useRef<{ [key: string]: NodeJS.Timeout }>({})
+  
   const updateItem = (index: number, field: keyof FoodItem, value: string | number) => {
     const newItems = [...items]
     const item = { ...newItems[index] }
+    const itemId = item.id || item.name
+    
+    // Get original values
+    const original = originalValues.current[itemId]
     
     if (field === 'quantity') {
-      // Parse the new quantity
       const newQty = String(value)
       const oldQty = item.quantity
       
-      // Extract numeric values
       const newNum = parseFloat(newQty.match(/(\d+\.?\d*)/)?.[1] || '1')
       const oldNum = parseFloat(oldQty.match(/(\d+\.?\d*)/)?.[1] || '1')
       
-      // Calculate ratio for proportional scaling
       const ratio = newNum / oldNum
       
       item.quantity = newQty
@@ -50,6 +117,25 @@ export default function CalorieResults({ foodItems: initialItems, onUpdateItems 
     newItems[index] = item
     setItems(newItems)
     onUpdateItems?.(newItems)
+    
+    // Debounce saving corrections (wait 2 seconds after last edit)
+    if (original) {
+      const hasChanges = 
+        item.calories !== original.calories ||
+        item.quantity !== original.quantity
+      
+      if (hasChanges) {
+        // Clear existing timeout
+        if (correctionTimeouts.current[itemId]) {
+          clearTimeout(correctionTimeouts.current[itemId])
+        }
+        
+        // Set new timeout to save correction
+        correctionTimeouts.current[itemId] = setTimeout(() => {
+          saveCorrection(item, original)
+        }, 2000)
+      }
+    }
   }
 
   const deleteItem = (index: number) => {
@@ -68,6 +154,13 @@ export default function CalorieResults({ foodItems: initialItems, onUpdateItems 
       calories: parseInt(newItem.calories) || 0,
     }
     
+    // Store original values for new item
+    originalValues.current[item.id] = {
+      name: item.name,
+      quantity: item.quantity,
+      calories: item.calories,
+    }
+    
     const newItems = [...items, item]
     setItems(newItems)
     onUpdateItems?.(newItems)
@@ -75,9 +168,74 @@ export default function CalorieResults({ foodItems: initialItems, onUpdateItems 
     setShowAddForm(false)
   }
 
+  // Submit feedback
+  const submitFeedback = async (isAccurate: boolean) => {
+    if (feedbackGiven) return
+    
+    try {
+      await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          isAccurate,
+          feedbackText: isAccurate ? 'User confirmed accuracy' : 'User indicated estimates need improvement',
+        }),
+      })
+      setFeedbackGiven(true)
+    } catch (error) {
+      console.error('Failed to submit feedback:', error)
+    }
+  }
+
   return (
     <div className="bg-white rounded-2xl shadow-xl p-6">
-      <h2 className="text-3xl font-bold text-primary-800 mb-6">Nutritional Analysis</h2>
+      <div className="flex justify-between items-start mb-6">
+        <h2 className="text-3xl font-bold text-primary-800">Nutritional Analysis</h2>
+        
+        {/* Feedback Buttons */}
+        {!feedbackGiven ? (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-500">Accurate?</span>
+            <button
+              onClick={() => submitFeedback(true)}
+              className="p-2 rounded-full hover:bg-green-50 transition-colors group"
+              title="Yes, this is accurate!"
+            >
+              <svg className="w-6 h-6 text-gray-400 group-hover:text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+              </svg>
+            </button>
+            <button
+              onClick={() => submitFeedback(false)}
+              className="p-2 rounded-full hover:bg-red-50 transition-colors group"
+              title="No, needs improvement"
+            >
+              <svg className="w-6 h-6 text-gray-400 group-hover:text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018a2 2 0 01.485.06l3.76.94m-7 10v5a2 2 0 002 2h.096c.5 0 .905-.405.905-.904 0-.715.211-1.413.608-2.008L17 13V4m-7 10h2m5-10h2a2 2 0 012 2v6a2 2 0 01-2 2h-2.5" />
+              </svg>
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 px-3 py-1 rounded-full">
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+            Thanks for the feedback!
+          </div>
+        )}
+      </div>
+      
+      {/* Saving indicator */}
+      {savingCorrection && (
+        <div className="mb-4 text-sm text-blue-600 bg-blue-50 px-3 py-2 rounded-lg flex items-center gap-2">
+          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+          Learning from your correction...
+        </div>
+      )}
       
       {/* Totals */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -245,13 +403,13 @@ export default function CalorieResults({ foodItems: initialItems, onUpdateItems 
       </div>
 
       {/* Tips */}
-      <div className="mt-6 p-4 bg-gray-50 rounded-lg text-sm text-gray-600">
-        <p className="font-medium mb-1">💡 Tips:</p>
+      <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg text-sm text-gray-600 border border-blue-100">
+        <p className="font-medium mb-1">🧠 AI Learning:</p>
         <ul className="list-disc list-inside space-y-1">
-          <li>Click on food names to edit them</li>
-          <li>Adjust portion sizes - calories will scale automatically</li>
-          <li>Click the trash icon to remove items</li>
-          <li>Use &quot;+ Add Item&quot; to add foods manually</li>
+          <li>Your corrections help improve estimates for everyone</li>
+          <li>Edit portions or calories - changes are saved automatically</li>
+          <li>Use the feedback buttons to rate accuracy</li>
+          <li>The more you use the app, the smarter it gets!</li>
         </ul>
       </div>
     </div>

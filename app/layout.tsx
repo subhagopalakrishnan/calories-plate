@@ -1,8 +1,9 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import { AuthProvider } from '@/components/AuthProvider'
 
 export const metadata: Metadata = {
-  title: 'Calories Plate - Food Calorie Calculator',
+  title: 'Calories Plate - AI Food Calorie Calculator',
   description: 'Take a photo of your food and get automatic calorie calculations',
 }
 
@@ -13,8 +14,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <AuthProvider>
+          {children}
+        </AuthProvider>
+      </body>
     </html>
   )
 }
-

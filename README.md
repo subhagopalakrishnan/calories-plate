@@ -1,88 +1,259 @@
-# Calories Plate - Food Calorie Calculator
+# 🍽️ Calories Plate - AI Food Calorie Calculator
 
-A modern web application that uses AI to analyze food images and automatically calculate calories and nutritional information.
+A modern web application that uses AI to analyze food images and automatically calculate calories and nutritional information. Similar to CalAI but open-source and customizable. **The AI learns and improves from user corrections!**
 
-## Features
+![Next.js](https://img.shields.io/badge/Next.js-14-black)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4-38bdf8)
+![Gemini AI](https://img.shields.io/badge/Gemini-2.0-4285f4)
+![Supabase](https://img.shields.io/badge/Supabase-Database-3fcf8e)
+
+## ✨ Features
 
 - 📸 **Image Upload**: Upload or take a photo of your food
-- 🤖 **AI-Powered Recognition**: Uses Google Gemini API (FREE tier!) to identify food items
+- 🤖 **AI-Powered Recognition**: Uses Google Gemini AI to identify food items
 - 📊 **Nutritional Analysis**: Automatic calorie, protein, carbs, and fat calculations
-- 🎨 **Modern UI**: Beautiful, responsive interface built with Next.js and Tailwind CSS
-- 💰 **Free to Use**: Powered by Google Gemini's generous free tier
+- ✏️ **Editable Results**: Adjust portions, calories, and food names
+- ➕ **Add Custom Items**: Manually add foods the AI missed
+- 🗑️ **Remove Items**: Delete incorrect detections
+- 🧠 **Self-Learning AI**: Gets smarter from user corrections
+- 👤 **User Accounts**: Save meals and track daily intake
+- 📈 **Daily Dashboard**: View your calorie tracking progress
+- 🎨 **Modern UI**: Beautiful, responsive interface
 
-## Getting Started
+## 🧠 AI Learning System
+
+The app gets smarter over time through a self-learning system:
+
+### How It Works
+
+1. **User Corrections Saved**: When you edit a calorie value or portion, it's saved to the `user_corrections` table
+2. **Aggregated Learning**: A database trigger calculates running averages in the `learned_foods` table
+3. **Improved Prompts**: The next time anyone scans a similar food, the AI uses these verified values
+4. **Confidence Scores**: Foods with more corrections have higher confidence (0-1 scale)
+
+### Data Flow
+
+```
+User edits calories → Correction saved → Running average updated → AI prompt enhanced
+                           ↓
+                    learned_foods table
+                    (food_name, avg_calories, sample_count, confidence)
+```
+
+### Feedback System
+
+- 👍 **Thumbs Up**: Confirms the AI estimate was accurate
+- 👎 **Thumbs Down**: Indicates the estimate needs improvement
+- This feedback helps measure overall accuracy and identify problem areas
+
+## 🚀 Getting Started
 
 ### Prerequisites
 
 - Node.js 18+ installed
-- Hugging Face API key (FREE - get one at [https://huggingface.co/settings/tokens](https://huggingface.co/settings/tokens))
+- Google Gemini API key (get one at [Google AI Studio](https://aistudio.google.com/app/apikey))
+- Supabase account (for user auth and data storage)
 
 ### Installation
 
-1. Install dependencies:
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/calories-plate.git
+cd calories-plate
+```
+
+2. Install dependencies:
 ```bash
 npm install
 ```
 
-2. Create a `.env.local` file in the root directory:
+3. Create a `.env.local` file in the root directory:
 ```
-HF_API_KEY=your_huggingface_api_key_here
+GEMINI_API_KEY=your_gemini_api_key_here
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
-   Get your free API key at: [https://huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
+4. Set up Supabase database:
+   - Run the SQL from `supabase/schema.sql` in your Supabase SQL editor
 
-3. Run the development server:
+5. Run the development server:
 ```bash
 npm run dev
 ```
 
-4. Open [http://localhost:3000](http://localhost:3000) in your browser
+6. Open [http://localhost:3000](http://localhost:3000) in your browser
 
-## How It Works
+## 🔍 How Does It Work?
 
-1. **Image Capture**: Users can upload an image or take a photo using their device camera
-2. **AI Analysis**: The image is sent to Google Gemini's vision model to identify food items
-3. **Calorie Calculation**: The app matches identified foods against a nutritional database and calculates calories based on estimated quantities
-4. **Results Display**: Nutritional information is displayed in an easy-to-read format
+### Food Detection Process
 
-## Tech Stack
+1. **User uploads a photo** → Image is converted to Base64 format
+2. **Learned foods fetched** → Previous user corrections are retrieved
+3. **Image sent to Gemini AI** → AI analyzes with enhanced prompt including learned data
+4. **AI returns nutritional data** → Food names, portions, calories, macros
+5. **Results displayed** → User can edit and adjust values
+6. **Corrections saved** → Any edits improve future estimates
 
-- **Next.js 14** - React framework with App Router
-- **TypeScript** - Type safety
-- **Tailwind CSS** - Styling
-- **Hugging Face API** - Free image captioning for food recognition (BLIP model)
-- **Food Database** - Built-in nutritional database for common foods
+### Data Flow
 
-## API Endpoints
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   User      │────▶│  Next.js    │────▶│  Gemini     │────▶│  Response   │
+│  uploads    │     │  API Route  │     │  AI API     │     │  with food  │
+│  photo      │     │ + learned   │     │ + enhanced  │     │  data       │
+└─────────────┘     │  foods      │     │  prompt     │     └─────────────┘
+                    └─────────────┘     └─────────────┘
+                           ▲
+                           │
+                    ┌─────────────┐
+                    │  Supabase   │
+                    │  Database   │
+                    │ (learned_   │
+                    │  foods)     │
+                    └─────────────┘
+```
 
-- `POST /api/analyze` - Analyzes an uploaded food image and returns nutritional information
+## 💾 Database Schema
 
-## Notes
+### Tables
 
-- The app uses a built-in food database for calorie calculations. For production use, consider integrating with a comprehensive nutritional database API like USDA FoodData Central or Edamam.
-- Quantity estimation is approximate. For more accurate results, users could manually adjust quantities.
-- **Google Gemini API is FREE** with generous rate limits! No credit card required for the free tier.
-- You can test your API key using: `node test-gemini.js your_api_key_here`
+| Table | Purpose |
+|-------|---------|
+| `profiles` | User accounts and settings |
+| `food_logs` | Saved meals with nutritional data |
+| `daily_summaries` | Daily calorie totals |
+| `user_corrections` | When users edit AI estimates |
+| `learned_foods` | Aggregated nutritional data from corrections |
+| `user_feedback` | Thumbs up/down on accuracy |
 
-## Deployment
+### Learning Tables Detail
+
+**`user_corrections`**
+```sql
+- food_name: "Chicken Biryani"
+- original_calories: 350
+- corrected_calories: 420
+- original_protein: 15
+- corrected_protein: 22
+```
+
+**`learned_foods`**
+```sql
+- food_name: "Chicken Biryani"
+- avg_calories_per_100g: 385
+- sample_count: 47
+- confidence_score: 0.85
+```
+
+## 🔌 APIs Used
+
+| API | Purpose | Endpoint |
+|-----|---------|----------|
+| **Google Gemini AI** | Analyze food images | `generativelanguage.googleapis.com` |
+| **Supabase** | Database & Auth | `<your-project>.supabase.co` |
+
+## 🛠️ Technology Stack
+
+| Layer | Technology |
+|-------|------------|
+| **Framework** | Next.js 14 (React) |
+| **Language** | TypeScript |
+| **Styling** | Tailwind CSS |
+| **AI/ML** | Google Gemini 2.0 Flash |
+| **Database** | Supabase (PostgreSQL) |
+| **Auth** | Supabase Auth |
+| **Hosting** | Vercel |
+
+## 📁 Project Structure
+
+```
+calories-plate/
+├── app/
+│   ├── api/
+│   │   ├── analyze/route.ts      # AI analysis endpoint
+│   │   ├── corrections/route.ts  # Save user corrections
+│   │   ├── feedback/route.ts     # Save accuracy feedback
+│   │   ├── learned-foods/route.ts # Get learned data
+│   │   └── logs/route.ts         # Meal logging
+│   ├── page.tsx                  # Main page
+│   ├── layout.tsx                # App layout
+│   └── globals.css               # Global styles
+├── components/
+│   ├── ImageUpload.tsx           # Photo upload
+│   ├── CalorieResults.tsx        # Results + learning UI
+│   ├── AuthModal.tsx             # Sign in/up
+│   ├── AuthProvider.tsx          # Auth context
+│   └── DailyDashboard.tsx        # Daily tracking
+├── lib/
+│   └── supabase.ts               # Supabase client
+├── types/
+│   ├── index.ts                  # FoodItem types
+│   └── database.ts               # Database types
+├── supabase/
+│   └── schema.sql                # Complete database schema
+└── package.json
+```
+
+## 📝 Language Breakdown
+
+| Language | Usage |
+|----------|-------|
+| **TypeScript** | ~90% (logic, components, API) |
+| **SQL** | ~5% (database schema, triggers) |
+| **CSS** | ~5% (Tailwind + globals) |
+
+## 🔐 Security & Privacy
+
+- **API Keys**: Stored as environment variables (not in code)
+- **Images**: Processed in memory, not permanently stored
+- **User Data**: Stored securely in Supabase with RLS policies
+- **Row Level Security**: Users can only access their own data
+
+## 🚀 Deployment
 
 ### Deploy to Vercel
 
-The easiest way to deploy is using Vercel:
-
 1. Push your code to GitHub
 2. Import your repository on [Vercel](https://vercel.com)
-3. Add environment variable `HF_API_KEY` in Vercel project settings
+3. Add environment variables in project settings:
+   - `GEMINI_API_KEY`
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 4. Deploy!
 
-For detailed deployment instructions, see [DEPLOYMENT.md](./DEPLOYMENT.md)
+### Supabase Setup
 
-### Quick Deploy
+1. Create a new Supabase project
+2. Go to SQL Editor
+3. Run the contents of `supabase/schema.sql`
+4. Enable Email Auth in Authentication settings
+5. Copy your project URL and anon key to `.env.local`
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/yourusername/calories-plate)
+## 🤝 Contributing
 
-## License
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-MIT
+### Ways to Contribute
 
-# calories-plate
+- Improve AI prompts for better accuracy
+- Add more cuisines to the reference data
+- Enhance the learning algorithms
+- Fix bugs or improve UX
+
+## 📄 License
+
+MIT License - feel free to use this project for personal or commercial purposes.
+
+## 🙏 Acknowledgments
+
+- [Google Gemini AI](https://ai.google.dev/) for the vision API
+- [Supabase](https://supabase.com/) for database and auth
+- [Next.js](https://nextjs.org/) for the React framework
+- [Tailwind CSS](https://tailwindcss.com/) for styling
+- [Vercel](https://vercel.com/) for hosting
+
+---
+
+**Note**: Calorie estimates are approximate and improve over time with user corrections. Not a substitute for professional dietary advice.
