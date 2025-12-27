@@ -147,15 +147,16 @@ export default function CalorieResults({ foodItems: initialItems, onUpdateItems,
   const addItem = () => {
     if (!newItem.name || !newItem.calories) return
     
+    const itemId = Date.now().toString()
     const item: FoodItem = {
-      id: Date.now().toString(),
+      id: itemId,
       name: newItem.name,
       quantity: newItem.quantity || '1 serving',
       calories: parseInt(newItem.calories) || 0,
     }
     
     // Store original values for new item
-    originalValues.current[item.id] = {
+    originalValues.current[itemId] = {
       name: item.name,
       quantity: item.quantity,
       calories: item.calories,
