@@ -11,6 +11,9 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createServerClient()
+    if (!supabase) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 500 })
+    }
 
     // Calculate totals
     const totalCalories = foodItems.reduce((sum: number, item: { calories: number }) => sum + item.calories, 0)
@@ -92,6 +95,9 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = createServerClient()
+    if (!supabase) {
+      return NextResponse.json({ logs: [] })
+    }
 
     let query = supabase
       .from('food_logs')
@@ -118,4 +124,3 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
-

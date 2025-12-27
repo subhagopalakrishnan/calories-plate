@@ -12,6 +12,9 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createServerClient()
+    if (!supabase) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 500 })
+    }
 
     const { error } = await supabase
       .from('user_feedback')
@@ -36,9 +39,12 @@ export async function POST(request: NextRequest) {
 }
 
 // Get feedback stats
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const supabase = createServerClient()
+    if (!supabase) {
+      return NextResponse.json({ total: 0, accurate: 0, accuracyRate: '0%' })
+    }
 
     const { data, error } = await supabase
       .from('user_feedback')
@@ -49,7 +55,7 @@ export async function GET(request: NextRequest) {
     }
 
     const total = data?.length || 0
-    const accurate = data?.filter(f => f.is_accurate).length || 0
+    const accurate = data?.filter((f: { is_accurate: boolean }) => f.is_accurate).length || 0
     const accuracyRate = total > 0 ? (accurate / total * 100).toFixed(1) : 0
 
     return NextResponse.json({ 
@@ -63,4 +69,3 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
-

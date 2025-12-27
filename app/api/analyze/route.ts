@@ -25,6 +25,8 @@ function getDemoResponse(): FoodItem[] {
 async function getLearnedFoodsData(): Promise<LearnedFood[]> {
   try {
     const supabase = createServerClient()
+    if (!supabase) return []
+    
     const { data } = await supabase
       .from('learned_foods')
       .select('*')

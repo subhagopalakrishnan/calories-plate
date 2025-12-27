@@ -12,6 +12,10 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = createServerClient()
+    if (!supabase) {
+      return NextResponse.json({ food: null })
+    }
+
     const normalizedName = foodName.toLowerCase().trim()
 
     // Try exact match first
@@ -42,9 +46,12 @@ export async function GET(request: NextRequest) {
 }
 
 // Get all learned foods (for building local cache)
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     const supabase = createServerClient()
+    if (!supabase) {
+      return NextResponse.json({ foods: [] })
+    }
 
     const { data, error } = await supabase
       .from('learned_foods')
@@ -64,4 +71,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
-

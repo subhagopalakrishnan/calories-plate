@@ -25,6 +25,9 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createServerClient()
+    if (!supabase) {
+      return NextResponse.json({ error: 'Database not configured' }, { status: 500 })
+    }
 
     // Save the correction
     const { error } = await supabase
@@ -56,4 +59,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
-
