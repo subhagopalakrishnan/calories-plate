@@ -405,6 +405,7 @@ export default function Home() {
         {/* Footer */}
         <footer className="mt-8 text-center text-sm text-gray-500">
           <p>Powered by Google Gemini AI • 🧠 AI learns from your corrections</p>
+          <p className="mt-1">Built by <span className="font-medium text-primary-600">Subha Gopalakrishnan</span></p>
         </footer>
       </div>
 
