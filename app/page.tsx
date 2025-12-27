@@ -1,12 +1,20 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import ImageUpload from '@/components/ImageUpload'
 import CalorieResults from '@/components/CalorieResults'
 import DailyDashboard from '@/components/DailyDashboard'
 import AuthModal from '@/components/AuthModal'
 import { useAuth } from '@/components/AuthProvider'
 import { FoodItem } from '@/types'
+
+// Default nutrition goals
+const DEFAULT_GOALS = {
+  calories: 2000,
+  protein: 50,
+  carbs: 250,
+  fat: 65,
+}
 
 export default function Home() {
   const { user, profile, loading: authLoading, signOut } = useAuth()
@@ -19,6 +27,15 @@ export default function Home() {
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [mealType, setMealType] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('snack')
   const [saveSuccess, setSaveSuccess] = useState(false)
+  const [lastImageFile, setLastImageFile] = useState<File | null>(null)
+
+  // Calculate current meal totals
+  const currentMealTotals = useMemo(() => ({
+    calories: foodItems.reduce((sum, item) => sum + item.calories, 0),
+    protein: foodItems.reduce((sum, item) => sum + (item.protein || 0), 0),
+    carbs: foodItems.reduce((sum, item) => sum + (item.carbs || 0), 0),
+    fat: foodItems.reduce((sum, item) => sum + (item.fat || 0), 0),
+  }), [foodItems])
 
   const handleImageAnalysis = async (imageFile: File) => {
     setLoading(true)
@@ -27,6 +44,7 @@ export default function Home() {
     setIsDemo(false)
     setDemoMessage(null)
     setSaveSuccess(false)
+    setLastImageFile(imageFile)
 
     const reader = new FileReader()
     reader.onloadend = () => setImagePreview(reader.result as string)
@@ -59,6 +77,12 @@ export default function Home() {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleRetry = () => {
+    if (lastImageFile) {
+      handleImageAnalysis(lastImageFile)
     }
   }
 
@@ -102,6 +126,7 @@ export default function Home() {
     setIsDemo(false)
     setDemoMessage(null)
     setSaveSuccess(false)
+    setLastImageFile(null)
   }
 
   return (
@@ -170,20 +195,47 @@ export default function Home() {
               )}
             </div>
 
-            {/* Error */}
+            {/* Error with Retry */}
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-2">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                {error}
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>{error}</span>
+                  </div>
+                  {lastImageFile && (
+                    <button
+                      onClick={handleRetry}
+                      className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700"
+                    >
+                      Retry
+                    </button>
+                  )}
+                </div>
               </div>
             )}
 
-            {/* Demo Notice */}
+            {/* Demo Notice with Retry */}
             {isDemo && (
               <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg">
-                <strong>Demo Mode:</strong> {demoMessage}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <strong>Demo Mode:</strong> {demoMessage}
+                  </div>
+                  {lastImageFile && (
+                    <button
+                      onClick={handleRetry}
+                      className="px-3 py-1 bg-yellow-600 text-white text-sm rounded hover:bg-yellow-700"
+                    >
+                      Retry
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs mt-2 text-yellow-600">
+                  Tip: If running locally, run the server in Terminal app (not Cursor) for network access.
+                </p>
               </div>
             )}
 
@@ -233,49 +285,92 @@ export default function Home() {
             )}
           </div>
 
-          {/* Sidebar - Dashboard */}
+          {/* Sidebar - Daily Nutrition */}
           <div className="lg:col-span-1">
-            {user ? (
-              <DailyDashboard />
-            ) : (
-              <div className="bg-white rounded-2xl shadow-xl p-6">
-                <h3 className="text-xl font-bold text-gray-800 mb-4 text-center">Daily Nutrition Goals</h3>
-                
-                {/* Sample Goals Preview */}
-                <div className="space-y-3 mb-4">
-                  <div>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-gray-600">🔥 Calories</span>
-                      <span className="text-gray-400">0 / 2000</span>
-                    </div>
-                    <div className="h-2 bg-gray-200 rounded-full" />
+            <div className="bg-white rounded-2xl shadow-xl p-6 sticky top-6">
+              <h3 className="text-xl font-bold text-gray-800 mb-4 text-center">
+                {foodItems.length > 0 ? 'Current Meal' : 'Daily Nutrition Goals'}
+              </h3>
+              
+              {/* Nutrition Progress */}
+              <div className="space-y-4 mb-4">
+                {/* Calories */}
+                <div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-gray-600">🔥 Calories</span>
+                    <span className={foodItems.length > 0 ? 'text-primary-600 font-medium' : 'text-gray-400'}>
+                      {currentMealTotals.calories} / {DEFAULT_GOALS.calories}
+                    </span>
                   </div>
-                  <div>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-gray-600">🥩 Protein</span>
-                      <span className="text-gray-400">0 / 50g</span>
-                    </div>
-                    <div className="h-2 bg-gray-200 rounded-full" />
+                  <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-primary-500 rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min((currentMealTotals.calories / DEFAULT_GOALS.calories) * 100, 100)}%` }}
+                    />
                   </div>
-                  <div>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-gray-600">🍞 Carbs</span>
-                      <span className="text-gray-400">0 / 250g</span>
+                  {foodItems.length > 0 && (
+                    <div className="text-xs text-gray-500 mt-1">
+                      {DEFAULT_GOALS.calories - currentMealTotals.calories > 0 
+                        ? `${DEFAULT_GOALS.calories - currentMealTotals.calories} remaining`
+                        : `${currentMealTotals.calories - DEFAULT_GOALS.calories} over`}
                     </div>
-                    <div className="h-2 bg-gray-200 rounded-full" />
+                  )}
+                </div>
+
+                {/* Protein */}
+                <div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-gray-600">🥩 Protein</span>
+                    <span className={foodItems.length > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}>
+                      {currentMealTotals.protein.toFixed(0)}g / {DEFAULT_GOALS.protein}g
+                    </span>
                   </div>
-                  <div>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-gray-600">🥑 Fat</span>
-                      <span className="text-gray-400">0 / 65g</span>
-                    </div>
-                    <div className="h-2 bg-gray-200 rounded-full" />
+                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min((currentMealTotals.protein / DEFAULT_GOALS.protein) * 100, 100)}%` }}
+                    />
                   </div>
                 </div>
 
+                {/* Carbs */}
+                <div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-gray-600">🍞 Carbs</span>
+                    <span className={foodItems.length > 0 ? 'text-yellow-600 font-medium' : 'text-gray-400'}>
+                      {currentMealTotals.carbs.toFixed(0)}g / {DEFAULT_GOALS.carbs}g
+                    </span>
+                  </div>
+                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-yellow-500 rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min((currentMealTotals.carbs / DEFAULT_GOALS.carbs) * 100, 100)}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Fat */}
+                <div>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-gray-600">🥑 Fat</span>
+                    <span className={foodItems.length > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}>
+                      {currentMealTotals.fat.toFixed(0)}g / {DEFAULT_GOALS.fat}g
+                    </span>
+                  </div>
+                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-orange-500 rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min((currentMealTotals.fat / DEFAULT_GOALS.fat) * 100, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Sign in prompt for non-users */}
+              {!user && (
                 <div className="border-t pt-4 text-center">
                   <p className="text-sm text-gray-500 mb-3">
-                    Sign in to track your daily nutrition and set personalized goals
+                    Sign in to track daily totals & set custom goals
                   </p>
                   <button
                     onClick={() => setShowAuthModal(true)}
@@ -284,15 +379,26 @@ export default function Home() {
                     Get Started Free
                   </button>
                 </div>
+              )}
 
-                {/* Quick Tips */}
-                <div className="mt-4 p-3 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg">
-                  <p className="text-xs text-gray-600">
-                    💡 <strong>Did you know?</strong> Tracking nutrition helps you make better food choices and achieve your health goals!
-                  </p>
+              {/* User's daily dashboard */}
+              {user && (
+                <div className="border-t pt-4 mt-4">
+                  <DailyDashboard />
                 </div>
+              )}
+
+              {/* Quick Tips */}
+              <div className="mt-4 p-3 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg">
+                <p className="text-xs text-gray-600">
+                  💡 <strong>Tip:</strong> {
+                    foodItems.length > 0 
+                      ? 'Edit calories by clicking on values. Your changes help improve AI accuracy!'
+                      : 'Take a photo of your meal to get instant calorie estimates.'
+                  }
+                </p>
               </div>
-            )}
+            </div>
           </div>
         </div>
 
