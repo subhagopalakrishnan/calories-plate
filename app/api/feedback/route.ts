@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase'
+import { createServiceClient } from '@/lib/supabase'
 
 // Save user feedback on analysis accuracy
 export async function POST(request: NextRequest) {
@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    const supabase = createServerClient()
+    const supabase = createServiceClient()
     if (!supabase) {
       return NextResponse.json({ error: 'Database not configured' }, { status: 500 })
     }
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
 // Get feedback stats
 export async function GET() {
   try {
-    const supabase = createServerClient()
+    const supabase = createServiceClient()
     if (!supabase) {
       return NextResponse.json({ total: 0, accurate: 0, accuracyRate: '0%' })
     }

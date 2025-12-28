@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase'
+import { createServiceClient } from '@/lib/supabase'
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    const supabase = createServerClient()
+    const supabase = createServiceClient()
     if (!supabase) {
       return NextResponse.json({ error: 'Database not configured' }, { status: 500 })
     }
@@ -94,7 +94,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'User ID required' }, { status: 400 })
     }
 
-    const supabase = createServerClient()
+    const supabase = createServiceClient()
     if (!supabase) {
       return NextResponse.json({ logs: [] })
     }
