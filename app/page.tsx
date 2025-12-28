@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import ImageUpload from '@/components/ImageUpload'
 import CalorieResults from '@/components/CalorieResults'
-import DailyDashboard from '@/components/DailyDashboard'
+import DailyDashboard, { DailyDashboardRef } from '@/components/DailyDashboard'
 import AuthModal from '@/components/AuthModal'
 import { useAuth } from '@/components/AuthProvider'
 import { FoodItem } from '@/types'
@@ -28,6 +28,9 @@ export default function Home() {
   const [mealType, setMealType] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('snack')
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [lastImageFile, setLastImageFile] = useState<File | null>(null)
+  const [dailyTotals, setDailyTotals] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 })
+  
+  const dashboardRef = useRef<DailyDashboardRef>(null)
 
   // Calculate current meal totals
   const currentMealTotals = useMemo(() => ({
@@ -36,6 +39,27 @@ export default function Home() {
     carbs: foodItems.reduce((sum, item) => sum + (item.carbs || 0), 0),
     fat: foodItems.reduce((sum, item) => sum + (item.fat || 0), 0),
   }), [foodItems])
+
+  // Combined totals (daily logged + current meal)
+  const combinedTotals = useMemo(() => ({
+    calories: dailyTotals.calories + currentMealTotals.calories,
+    protein: dailyTotals.protein + currentMealTotals.protein,
+    carbs: dailyTotals.carbs + currentMealTotals.carbs,
+    fat: dailyTotals.fat + currentMealTotals.fat,
+  }), [dailyTotals, currentMealTotals])
+
+  // Update daily totals when dashboard refreshes
+  const updateDailyTotals = useCallback(() => {
+    if (dashboardRef.current) {
+      setDailyTotals(dashboardRef.current.todayTotals)
+    }
+  }, [])
+
+  // Periodically sync daily totals from dashboard
+  useEffect(() => {
+    const interval = setInterval(updateDailyTotals, 1000)
+    return () => clearInterval(interval)
+  }, [updateDailyTotals])
 
   const handleImageAnalysis = async (imageFile: File) => {
     setLoading(true)
@@ -92,6 +116,10 @@ export default function Home() {
       return
     }
 
+    if (foodItems.length === 0) {
+      return
+    }
+
     try {
       const response = await fetch('/api/logs', {
         method: 'POST',
@@ -112,10 +140,27 @@ export default function Home() {
 
       if (response.ok) {
         setSaveSuccess(true)
-        setTimeout(() => setSaveSuccess(false), 3000)
+        
+        // Refresh the dashboard to show new meal
+        setTimeout(() => {
+          dashboardRef.current?.refresh()
+          updateDailyTotals()
+        }, 500)
+        
+        // Clear current meal after a delay so user sees success
+        setTimeout(() => {
+          setFoodItems([])
+          setImagePreview(null)
+          setSaveSuccess(false)
+          setLastImageFile(null)
+        }, 2000)
+      } else {
+        const data = await response.json()
+        setError(data.error || 'Failed to save meal')
       }
     } catch (err) {
       console.error('Error saving meal:', err)
+      setError('Failed to save meal. Please try again.')
     }
   }
 
@@ -128,6 +173,9 @@ export default function Home() {
     setSaveSuccess(false)
     setLastImageFile(null)
   }
+
+  // Get remaining calories for the day
+  const remainingCalories = DEFAULT_GOALS.calories - combinedTotals.calories
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-primary-50 to-primary-100 py-8 px-4">
@@ -270,14 +318,19 @@ export default function Home() {
 
                   <button
                     onClick={handleSaveMeal}
-                    className="w-full py-3 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700"
+                    disabled={saveSuccess}
+                    className={`w-full py-3 rounded-lg font-medium transition-all ${
+                      saveSuccess 
+                        ? 'bg-green-500 text-white' 
+                        : 'bg-primary-600 text-white hover:bg-primary-700'
+                    }`}
                   >
-                    {user ? 'Save to My Diary' : 'Sign In to Save'}
+                    {saveSuccess ? '✓ Meal Saved!' : user ? `Save as ${mealType}` : 'Sign In to Save'}
                   </button>
 
                   {saveSuccess && (
-                    <div className="mt-3 text-center text-green-600 font-medium">
-                      ✓ Meal saved successfully!
+                    <div className="mt-3 text-center text-green-600 text-sm">
+                      Refreshing your daily totals...
                     </div>
                   )}
                 </div>
@@ -289,7 +342,7 @@ export default function Home() {
           <div className="lg:col-span-1">
             <div className="bg-white rounded-2xl shadow-xl p-6 sticky top-6">
               <h3 className="text-xl font-bold text-gray-800 mb-4 text-center">
-                {foodItems.length > 0 ? 'Current Meal' : 'Daily Nutrition Goals'}
+                Daily Nutrition
               </h3>
               
               {/* Nutrition Progress */}
@@ -298,37 +351,43 @@ export default function Home() {
                 <div>
                   <div className="flex justify-between text-sm mb-1">
                     <span className="text-gray-600">🔥 Calories</span>
-                    <span className={foodItems.length > 0 ? 'text-primary-600 font-medium' : 'text-gray-400'}>
-                      {currentMealTotals.calories} / {DEFAULT_GOALS.calories}
+                    <span className="font-medium">
+                      <span className={combinedTotals.calories > 0 ? 'text-primary-600' : 'text-gray-400'}>
+                        {combinedTotals.calories}
+                      </span>
+                      <span className="text-gray-400"> / {DEFAULT_GOALS.calories}</span>
                     </span>
                   </div>
                   <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
                     <div 
-                      className="h-full bg-primary-500 rounded-full transition-all duration-500"
-                      style={{ width: `${Math.min((currentMealTotals.calories / DEFAULT_GOALS.calories) * 100, 100)}%` }}
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        combinedTotals.calories > DEFAULT_GOALS.calories ? 'bg-red-500' : 'bg-primary-500'
+                      }`}
+                      style={{ width: `${Math.min((combinedTotals.calories / DEFAULT_GOALS.calories) * 100, 100)}%` }}
                     />
                   </div>
-                  {foodItems.length > 0 && (
-                    <div className="text-xs text-gray-500 mt-1">
-                      {DEFAULT_GOALS.calories - currentMealTotals.calories > 0 
-                        ? `${DEFAULT_GOALS.calories - currentMealTotals.calories} remaining`
-                        : `${currentMealTotals.calories - DEFAULT_GOALS.calories} over`}
-                    </div>
-                  )}
+                  <div className={`text-xs mt-1 ${remainingCalories < 0 ? 'text-red-500 font-medium' : 'text-gray-500'}`}>
+                    {remainingCalories > 0 
+                      ? `${remainingCalories} calories remaining`
+                      : `${Math.abs(remainingCalories)} calories over limit`}
+                  </div>
                 </div>
 
                 {/* Protein */}
                 <div>
                   <div className="flex justify-between text-sm mb-1">
                     <span className="text-gray-600">🥩 Protein</span>
-                    <span className={foodItems.length > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}>
-                      {currentMealTotals.protein.toFixed(0)}g / {DEFAULT_GOALS.protein}g
+                    <span className="font-medium">
+                      <span className={combinedTotals.protein > 0 ? 'text-blue-600' : 'text-gray-400'}>
+                        {combinedTotals.protein.toFixed(0)}g
+                      </span>
+                      <span className="text-gray-400"> / {DEFAULT_GOALS.protein}g</span>
                     </span>
                   </div>
                   <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                     <div 
                       className="h-full bg-blue-500 rounded-full transition-all duration-500"
-                      style={{ width: `${Math.min((currentMealTotals.protein / DEFAULT_GOALS.protein) * 100, 100)}%` }}
+                      style={{ width: `${Math.min((combinedTotals.protein / DEFAULT_GOALS.protein) * 100, 100)}%` }}
                     />
                   </div>
                 </div>
@@ -337,14 +396,17 @@ export default function Home() {
                 <div>
                   <div className="flex justify-between text-sm mb-1">
                     <span className="text-gray-600">🍞 Carbs</span>
-                    <span className={foodItems.length > 0 ? 'text-yellow-600 font-medium' : 'text-gray-400'}>
-                      {currentMealTotals.carbs.toFixed(0)}g / {DEFAULT_GOALS.carbs}g
+                    <span className="font-medium">
+                      <span className={combinedTotals.carbs > 0 ? 'text-yellow-600' : 'text-gray-400'}>
+                        {combinedTotals.carbs.toFixed(0)}g
+                      </span>
+                      <span className="text-gray-400"> / {DEFAULT_GOALS.carbs}g</span>
                     </span>
                   </div>
                   <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                     <div 
                       className="h-full bg-yellow-500 rounded-full transition-all duration-500"
-                      style={{ width: `${Math.min((currentMealTotals.carbs / DEFAULT_GOALS.carbs) * 100, 100)}%` }}
+                      style={{ width: `${Math.min((combinedTotals.carbs / DEFAULT_GOALS.carbs) * 100, 100)}%` }}
                     />
                   </div>
                 </div>
@@ -353,24 +415,35 @@ export default function Home() {
                 <div>
                   <div className="flex justify-between text-sm mb-1">
                     <span className="text-gray-600">🥑 Fat</span>
-                    <span className={foodItems.length > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}>
-                      {currentMealTotals.fat.toFixed(0)}g / {DEFAULT_GOALS.fat}g
+                    <span className="font-medium">
+                      <span className={combinedTotals.fat > 0 ? 'text-orange-600' : 'text-gray-400'}>
+                        {combinedTotals.fat.toFixed(0)}g
+                      </span>
+                      <span className="text-gray-400"> / {DEFAULT_GOALS.fat}g</span>
                     </span>
                   </div>
                   <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                     <div 
                       className="h-full bg-orange-500 rounded-full transition-all duration-500"
-                      style={{ width: `${Math.min((currentMealTotals.fat / DEFAULT_GOALS.fat) * 100, 100)}%` }}
+                      style={{ width: `${Math.min((combinedTotals.fat / DEFAULT_GOALS.fat) * 100, 100)}%` }}
                     />
                   </div>
                 </div>
               </div>
 
+              {/* Current meal indicator */}
+              {foodItems.length > 0 && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4 text-sm">
+                  <div className="font-medium text-yellow-800">📸 Current Meal (unsaved)</div>
+                  <div className="text-yellow-700">+{currentMealTotals.calories} calories</div>
+                </div>
+              )}
+
               {/* Sign in prompt for non-users */}
               {!user && (
                 <div className="border-t pt-4 text-center">
                   <p className="text-sm text-gray-500 mb-3">
-                    Sign in to track daily totals & set custom goals
+                    Sign in to save meals & track daily totals
                   </p>
                   <button
                     onClick={() => setShowAuthModal(true)}
@@ -384,7 +457,7 @@ export default function Home() {
               {/* User's daily dashboard */}
               {user && (
                 <div className="border-t pt-4 mt-4">
-                  <DailyDashboard />
+                  <DailyDashboard ref={dashboardRef} />
                 </div>
               )}
 
@@ -393,7 +466,7 @@ export default function Home() {
                 <p className="text-xs text-gray-600">
                   💡 <strong>Tip:</strong> {
                     foodItems.length > 0 
-                      ? 'Edit calories by clicking on values. Your changes help improve AI accuracy!'
+                      ? 'Save your meal to track it in your daily totals!'
                       : 'Take a photo of your meal to get instant calorie estimates.'
                   }
                 </p>
@@ -414,3 +487,4 @@ export default function Home() {
     </main>
   )
 }
+

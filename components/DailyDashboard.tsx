@@ -1,44 +1,60 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback, forwardRef, useImperativeHandle } from 'react'
 import { useAuth } from './AuthProvider'
 import { supabase } from '@/lib/supabase'
 import { FoodLog } from '@/types/database'
 
-export default function DailyDashboard() {
+export interface DailyDashboardRef {
+  refresh: () => void
+  todayTotals: {
+    calories: number
+    protein: number
+    carbs: number
+    fat: number
+  }
+}
+
+const DailyDashboard = forwardRef<DailyDashboardRef>((_, ref) => {
   const { user } = useAuth()
   const [todayLogs, setTodayLogs] = useState<FoodLog[]>([])
   const [loading, setLoading] = useState(true)
 
   const today = new Date().toISOString().split('T')[0]
 
-  useEffect(() => {
-    if (user) {
-      fetchTodayData()
-    }
-  }, [user])
-
-  async function fetchTodayData() {
+  const fetchTodayData = useCallback(async () => {
+    if (!user) return
+    
     setLoading(true)
     
     try {
       const startOfDay = `${today}T00:00:00.000Z`
       const endOfDay = `${today}T23:59:59.999Z`
 
-      const { data: logsData } = await supabase
+      const { data: logsData, error } = await supabase
         .from('food_logs')
         .select('*')
-        .eq('user_id', user!.id)
+        .eq('user_id', user.id)
         .gte('logged_at', startOfDay)
         .lte('logged_at', endOfDay)
         .order('logged_at', { ascending: false })
 
-      setTodayLogs(logsData || [])
+      if (error) {
+        console.error('Error fetching logs:', error)
+      } else {
+        setTodayLogs(logsData || [])
+      }
     } catch (e) {
       console.log('Error fetching logs:', e)
     }
     setLoading(false)
-  }
+  }, [user, today])
+
+  useEffect(() => {
+    if (user) {
+      fetchTodayData()
+    }
+  }, [user, fetchTodayData])
 
   // Calculate today's totals from saved meals
   const todayTotals = todayLogs.reduce((acc, log) => ({
@@ -47,6 +63,12 @@ export default function DailyDashboard() {
     carbs: acc.carbs + log.total_carbs,
     fat: acc.fat + log.total_fat,
   }), { calories: 0, protein: 0, carbs: 0, fat: 0 })
+
+  // Expose refresh function and totals to parent
+  useImperativeHandle(ref, () => ({
+    refresh: fetchTodayData,
+    todayTotals
+  }), [fetchTodayData, todayTotals])
 
   if (loading) {
     return (
@@ -98,4 +120,8 @@ export default function DailyDashboard() {
       )}
     </div>
   )
-}
+})
+
+DailyDashboard.displayName = 'DailyDashboard'
+
+export default DailyDashboard
